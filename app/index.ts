@@ -12,12 +12,12 @@ const debug = require('debug');
 let allConfig;
 
 if (process.env.VOICE_CONFIG) {
-	allConfig = <Config>require(process.env.VOICE_CONFIG);
+  allConfig = <Config>require(process.env.VOICE_CONFIG);
 } else if (!fs.exists('./config.json')) {
-	console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment variable.');
-	process.exit(-1);
+  console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment variable.');
+  process.exit(-1);
 } else {
-	allConfig = <Config>require('./config.json');
+  allConfig = <Config>require('./config.json');
 }
 
 allConfig.debug = debug('node-assistant');
@@ -26,12 +26,12 @@ allConfig.authentication.clientId = process.env.ASSISTANT_CLIENT_ID;
 allConfig.authentication.clientSecret = process.env.ASSISTANT_CLIENT_SECRET;
 
 if (process.env.DEBUG === 'node-assistant') {
-	allConfig.verbose = true; // for other logging
+  allConfig.verbose = true; // for other logging
 }
 
 if (!allConfig.record) {
-	allConfig.record = new RecordConfig();
-	allConfig.record.programme = 'rec';
+  allConfig.record = new RecordConfig();
+  allConfig.record.programme = 'rec';
 }
 
 const hotword = allConfig.hotwords.active ? new Hotword(allConfig) : null;
@@ -67,32 +67,32 @@ const sendAudio = (text, assistant: AssistantClient) => {
 };
 
 auth.on('oauth-ready', (oauth2Client) => {
-	console.log('We have configured credentials');
+  console.log('We have configured credentials');
 
-	const assistant = new AssistantClient(allConfig, oauth2Client);
+  const assistant = new AssistantClient(allConfig, oauth2Client);
 
   allConfig.debug('assistant');
 
   if ( allConfig.hotwords.active ) {
     hotword.on('hotword', (match, index) => {
-  		process.nextTick(() => {
-  			allConfig.debug('assistant');
-  			//assistant.requestAssistant();
-  		});
-  	});
+      process.nextTick(() => {
+        allConfig.debug('assistant');
+        //assistant.requestAssistant();
+      });
+    });
 
-  	hotword.start();
+    hotword.start();
 
-  	assistant.on('speaker-closed', () => {
-  		// we seem to get this callback slightly before the speaker has finished
-  		// which can cause it to be cut off
-  		setTimeout(() => {
-  			hotword.start();
-  		}, 500);
-  	});
+    assistant.on('speaker-closed', () => {
+      // we seem to get this callback slightly before the speaker has finished
+      // which can cause it to be cut off
+      setTimeout(() => {
+        hotword.start();
+      }, 500);
+    });
   }
 
-	console.log('write something to interact with assistant');
+  console.log('write something to interact with assistant');
   process.stdin.setEncoding('utf8');
 
   process.stdin.on('readable', () => {
@@ -101,10 +101,10 @@ auth.on('oauth-ready', (oauth2Client) => {
       sendAudio(chunk, assistant);
     }
   });
-	// process.stdin.resume();
-	// process.stdin.on('data', (data) => {
-	// 	 console.log('New data', data.text())
-	// });
+  // process.stdin.resume();
+  // process.stdin.on('data', (data) => {
+  // 	 console.log('New data', data.text())
+  // });
 });
 
 auth.loadCredentials();
