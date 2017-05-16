@@ -1,8 +1,11 @@
 client_secret.json
 credentials.json
+creds.json
+config.json
 *.iml
 .idea
 yarn.lock
+yarn-error.log
 node_modules
 target
-
+.DS_Store

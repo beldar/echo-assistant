@@ -72,8 +72,8 @@ export class Authentication extends EventEmitter {
 	public loadCredentials() {
 		const auth = this.config.authentication;
 
-		console.log('trying to load credentials... ', auth.credentialsFilePath);
-		
+		console.log('trying to load credentials... ', auth.credentialsFilePath, fs.existsSync(auth.credentialsFilePath));
+
 		if (fs.existsSync(auth.credentialsFilePath)) {
 			this.credentials = <Credentials>require(auth.credentialsFilePath);
 			this.oauth2Client.setCredentials(this.credentials);

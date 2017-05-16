@@ -1,17 +1,18 @@
 {
 	"authentication": {
-		"clientId": "YOUR_CLIENT_ID",
-		"clientSecret": "YOUR_CLIENT_SECRET",
-		"credentialsFilePath": "./credentials.json"
+		"clientId": "",
+		"clientSecret": "",
+		"credentialsFilePath": "../../creds.json"
 	},
 
 	"hotwords": {
 		"hotwords": [
-				{
-					"hotwordFile":"resources/snowboy.umdl",
-					"soundFile": "resources/ding.wav",
-					"name": "snowboy"
-				}
-			]
-		}
+			{
+				"hotwordFile":"resources/snowboy.umdl",
+				"soundFile": "resources/ding.wav",
+				"name": "snowboy"
+			}
+		],
+    "active": false
+	}
 }

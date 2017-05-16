@@ -1,5 +1,5 @@
 
-import {Writable} from 'stream';
+import {Writable, Readable} from 'stream';
 const record = require('node-record-lpcm16');
 import grpc = require('grpc');
 const EmbeddedAssistantClient = require('./google/assistant/embedded/v1alpha1/embedded_assistant_grpc_pb').EmbeddedAssistantClient;
@@ -23,7 +23,7 @@ export class AssistantClient extends EventEmitter {
 
 	constructor( private config: Config, private oauth2Client ) {
 		super();
-		
+
 		this.callCreds = new grpc.Metadata();
 
 		this.setupAssistant();
@@ -116,13 +116,9 @@ export class AssistantClient extends EventEmitter {
 
 		if (resp.hasResult()) {
 			const result = resp.getResult();
-
+      console.log(result.toObject());
 			console.log('request text', result.getSpokenRequestText());
 			this.emit('request-text', result.getSpokenRequestText());
-			console.log('response text', result.getSpokenResponseText());
-			console.log('microphone mode', result.getMicrophoneMode());
-			// console.log('conversation state', result.getConversationState());
-			console.log('volume ', result.getVolumePercentage());
 			this.emit('result', result);
 		}
 
@@ -134,10 +130,10 @@ export class AssistantClient extends EventEmitter {
 	private setupConversationAudioRequestStream(converseStream: Writable) : Writable {
 		const audioPipe = new Writable();
 		const size = this.config.assistant.chunkSize;
-		
+
 		audioPipe._write = (chunk, enc, next) => {
 			this.config.debug('audio');
-			
+
 			if (!chunk.length) {
 				this.config.debug('ignoring');
 				return;
@@ -177,7 +173,7 @@ export class AssistantClient extends EventEmitter {
 		writer.on('data', (data : ConverseResponse) => {
 			this.converseResponse(data);
 		});
-		
+
 		writer.on('end', (err) => {
 			if (err) {
 				this.config.debug('failed ', err);
@@ -194,7 +190,11 @@ export class AssistantClient extends EventEmitter {
 		return writer;
 	}
 
-	public requestAssistant() {
+	public requestAssistant(stream: Readable ) {
+    if ( !stream ) {
+      this.config.debug('No stream passed');
+    }
+
 		const converseStream = this.setupConversationStream();
 		const audioRequestStream = this.setupConversationAudioRequestStream(converseStream);
 
@@ -205,15 +205,19 @@ export class AssistantClient extends EventEmitter {
 			this.emit('speaker-closed');
 		});
 
-		console.log('starting assistant');
-		const audio = record.start({verbose: this.config.verbose, recordProgram: this.config.record.programme});
-
-		audio.on('end', () => {
-			this.config.debug('closing conversation');
-			record.stop();
-			converseStream.end();
-		});
-
-		audio.pipe(audioRequestStream);
+    stream.pipe(audioRequestStream);
+    stream.on('end', () => {
+      this.config.debug('closing conversation');
+      converseStream.end();
+    });
+		// const audio = record.start({verbose: this.config.verbose, recordProgram: this.config.record.programme});
+    //
+		// audio.on('end', () => {
+		// 	this.config.debug('closing conversation');
+		// 	record.stop();
+		// 	converseStream.end();
+		// });
+    //
+		// audio.pipe(audioRequestStream);
 	}
 }

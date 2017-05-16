@@ -21,6 +21,7 @@ export class HotwordConfig {
 export class HotwordsConfig {
 	public hotwordFiles : string[];
 	public hotwords : Array<HotwordConfig>;
+  public active : boolean;
 }
 
 export class AssistantConfig {
