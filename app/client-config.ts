@@ -43,6 +43,7 @@ export class RecordConfig {
 
 export class Config {
   public debug : any; // comes from index.ts
+  public error: any;
   public verbose : boolean;
   public authentication: AuthenticationConfig;
   public assistant : AssistantConfig;

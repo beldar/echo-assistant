@@ -15,7 +15,7 @@ import {EventEmitter} from 'events';
 
 
 export class AssistantClient extends EventEmitter {
-  private currentConversationState: Uint8Array;
+  private currentConversationState;
   private callCreds;
   private assistant;
   private speaker : SpeakerSequencer;
@@ -92,10 +92,10 @@ export class AssistantClient extends EventEmitter {
 
   private converseResponse(resp: ConverseResponse) {
     if (resp.hasEventType()) {
-      console.log('event', resp.getEventType());
+      this.config.debug('event', resp.getEventType());
 
       if (resp.getEventType() === ConverseResponse.EventType.END_OF_UTTERANCE) {
-        console.log('end of utterance');
+        this.config.debug('end of utterance');
         record.stop();
       }
 
@@ -108,22 +108,20 @@ export class AssistantClient extends EventEmitter {
 
     if (resp.hasError()) {
       const error = resp.getError();
-      console.log('ERROR ', error.getMessage());
-      console.log('code: ', error.getCode());
-      console.log('failures: ', error.getDetailsList());
+      this.config.error(error);
       this.emit('error', error);
     }
 
     if (resp.hasResult()) {
       const result = resp.getResult();
-      console.log(result.toObject());
-      console.log('request text', result.getSpokenRequestText());
+      this.config.debug('request text', result.getSpokenRequestText());
+      this.currentConversationState = result.getConversationState();
       this.emit('request-text', result.getSpokenRequestText());
       this.emit('result', result);
     }
 
     if (!resp.hasEventType() && !resp.hasAudioOut() && !resp.hasError() && !resp.hasResult()) {
-      console.log('unknown packet', resp);
+      this.config.debug('unknown packet', resp);
     }
   }
 
@@ -146,12 +144,11 @@ export class AssistantClient extends EventEmitter {
         const end = ((count+1) * size) > chunk.length ? chunk.length : ((count+1) * size);
         const bit = new Uint8Array(chunk.slice(count * size, end));
 
-        // console.log(bit.length);
         converseRequest.setAudioIn(bit);
         try {
           converseStream.write(converseRequest);
         } catch (err) {
-          console.error(err);
+          this.config.error(err);
         }
       }
 

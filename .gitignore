@@ -1,7 +1,6 @@
 client_secret.json
 credentials.json
 creds.json
-config.json
 *.iml
 .idea
 yarn.lock
