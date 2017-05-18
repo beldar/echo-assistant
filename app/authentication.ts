@@ -90,6 +90,8 @@ export class Authentication extends EventEmitter {
       console.log('Please copy the below URL into your browser and paste in the reply');
       console.log(url);
 
+      this.emit('token-needed', url);
+
       const codeReader = readline.createInterface({
         input: process.stdin,
         output: process.stdout,

@@ -1,8 +1,10 @@
 import {Config, RecordConfig} from './client-config';
 import GoogleAuth = require('google-auth-library');
 import {AssistantClient} from './assistant';
+import {Hotword} from './hotword';
 import {Authentication} from './authentication';
 import fs = require('fs');
+import {Duplex} from 'stream';
 const { Polly } = require('aws-sdk');
 
 const debug = require('debug');
@@ -12,7 +14,7 @@ let allConfig;
 if (process.env.VOICE_CONFIG) {
   allConfig = <Config>require(process.env.VOICE_CONFIG);
 } else if (!fs.exists('./config.json')) {
-  console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment constiable.');
+  console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment variable.');
   process.exit(-1);
 } else {
   allConfig = <Config>require('./config.json');
@@ -26,6 +28,14 @@ allConfig.authentication.clientSecret = process.env.ASSISTANT_CLIENT_SECRET;
 if (process.env.DEBUG === 'node-assistant') {
   allConfig.verbose = true; // for other logging
 }
+
+if (!allConfig.record) {
+  allConfig.record = new RecordConfig();
+  allConfig.record.programme = 'rec';
+}
+
+const hotword = allConfig.hotwords.active ? new Hotword(allConfig) : null;
+
 
 const polly = new Polly({
   accessKeyId: process.env.AWS_POLLY_AK,
@@ -48,7 +58,7 @@ const sendAudio = (text, assistant: AssistantClient) => {
   polly.synthesizeSpeech(params)
     .on('httpHeaders', function(statusCode, headers) {
       if (statusCode < 300) {
-        const stream = this.response.httpResponse.createUnbufferedStream();
+        var stream = this.response.httpResponse.createUnbufferedStream();
         assistant.requestAssistant(stream);
       }
     })
@@ -56,42 +66,45 @@ const sendAudio = (text, assistant: AssistantClient) => {
     .send();
 };
 
-const Alexa = require('alexa-sdk');
-const NOT_FOUND = 'Sorry I don\'t know this command';
-const UNHANDLED_RESP = 'Are you talking to me?';
-const ERROR_RESP = 'Oops something went wrong';
+auth.on('oauth-ready', (oauth2Client) => {
+  console.log('We have configured credentials');
 
-exports.handler = function(event, context, callback) {
-  const alexa = Alexa.handler(event, context);
-  alexa.registerHandlers(handlers);
-  alexa.APP_ID = process.env.APP_ID;
-  alexa.execute();
-};
+  const assistant = new AssistantClient(allConfig, oauth2Client);
 
-const handlers = {
-  'ExecuteIntent': function () {
-    const query = this.event.request.intent.slots.query ? this.event.request.intent.slots.query.value : null;
-    const that = this;
-    console.log('Execute query: ', query);
+  allConfig.debug('assistant');
 
-    if (!query) return this.emit(':tell', 'No query found, please try again');
-
-    auth.on('oauth-ready', (oauth2Client) => {
-      const assistant = new AssistantClient(allConfig, oauth2Client);
-
-      allConfig.debug('assistant');
-
-      sendAudio(query, assistant);
+  if ( allConfig.hotwords.active ) {
+    hotword.on('hotword', (match, index) => {
+      process.nextTick(() => {
+        allConfig.debug('assistant');
+        //assistant.requestAssistant();
+      });
     });
 
-    auth.on('token-needed', () => {
-      this.emit(':tell', 'Token needed');
-    });
+    hotword.start();
 
-    auth.loadCredentials();
-  },
-  'Unhandled': function() {
-    console.log('Tell:', UNHANDLED_RESP);
-    this.emit(':tell', UNHANDLED_RESP);
+    assistant.on('speaker-closed', () => {
+      // we seem to get this callback slightly before the speaker has finished
+      // which can cause it to be cut off
+      setTimeout(() => {
+        hotword.start();
+      }, 500);
+    });
   }
-};
+
+  console.log('write something to interact with assistant');
+  process.stdin.setEncoding('utf8');
+
+  process.stdin.on('readable', () => {
+    var chunk = process.stdin.read();
+    if (chunk !== null) {
+      sendAudio(chunk, assistant);
+    }
+  });
+  // process.stdin.resume();
+  // process.stdin.on('data', (data) => {
+  // 	 console.log('New data', data.text())
+  // });
+});
+
+auth.loadCredentials();
