@@ -3,7 +3,7 @@ import GoogleAuth = require('google-auth-library');
 import {AssistantClient} from './assistant';
 import {Authentication} from './authentication';
 import fs = require('fs');
-const { Polly } = require('aws-sdk');
+const { Polly, S3 } = require('aws-sdk');
 
 const debug = require('debug');
 
@@ -33,6 +33,10 @@ const polly = new Polly({
   region: 'eu-west-1'
 });
 
+const s3 = new S3({
+  accessKeyId: process.env.AWS_S3_KEY,
+  secretAccessKey: process.env.AWS_S3_SECRET
+});
 
 const auth = new Authentication(allConfig);
 
@@ -68,27 +72,44 @@ exports.handler = function(event, context, callback) {
   alexa.execute();
 };
 
+const callAssistant = function(query) {
+  let that = this;
+  auth.on('oauth-ready', (oauth2Client) => {
+    const assistant = new AssistantClient(allConfig, oauth2Client);
+
+    allConfig.debug('assistant');
+
+    assistant.on('audio-file', path => {
+      let fileName = path.split('/').pop();
+      var params = {ACL:'public-read', Bucket: 'echo-assistant', Key: fileName, Body: fs.createReadStream(path)};
+      s3.upload(params, (err, data) => {
+        console.log(err, data);
+        if (!err) {
+          this.emit(':tell', `<speak><audio src="${data.Location}" /></speak>`)
+        }
+      });
+    });
+    sendAudio(query, assistant);
+  });
+
+  auth.on('token-needed', () => {
+    this.emit(':tell', 'Token needed');
+  });
+
+  auth.loadCredentials();
+};
+
+//callAssistant('hello');
+
 const handlers = {
-  'ExecuteIntent': function () {
+  'Assist': function () {
     const query = this.event.request.intent.slots.query ? this.event.request.intent.slots.query.value : null;
     const that = this;
     console.log('Execute query: ', query);
 
     if (!query) return this.emit(':tell', 'No query found, please try again');
 
-    auth.on('oauth-ready', (oauth2Client) => {
-      const assistant = new AssistantClient(allConfig, oauth2Client);
-
-      allConfig.debug('assistant');
-
-      sendAudio(query, assistant);
-    });
-
-    auth.on('token-needed', () => {
-      this.emit(':tell', 'Token needed');
-    });
-
-    auth.loadCredentials();
+    callAssistant(query);
   },
   'Unhandled': function() {
     console.log('Tell:', UNHANDLED_RESP);
