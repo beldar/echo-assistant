@@ -1,11 +1,9 @@
 import {Config, RecordConfig} from './client-config';
 import GoogleAuth = require('google-auth-library');
 import {AssistantClient} from './assistant';
-import {Hotword} from './hotword';
 import {Authentication} from './authentication';
 import fs = require('fs');
-import {Duplex} from 'stream';
-const { Polly } = require('aws-sdk');
+const { Polly, S3 } = require('aws-sdk');
 
 const debug = require('debug');
 
@@ -13,8 +11,8 @@ let allConfig;
 
 if (process.env.VOICE_CONFIG) {
   allConfig = <Config>require(process.env.VOICE_CONFIG);
-} else if (!fs.exists('../../config.json')) {
-  console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment variable.');
+} else if (!fs.exists('./config.json')) {
+  console.error('Cannot find config.json file, please specify full path in VOICE_CONFIG environment constiable.');
   process.exit(-1);
 } else {
   allConfig = <Config>require('../../config.json');
@@ -30,20 +28,16 @@ if (process.env.DEBUG === 'node-assistant') {
   allConfig.verbose = true; // for other logging
 }
 
-if (!allConfig.record) {
-  allConfig.record = new RecordConfig();
-  allConfig.record.programme = 'rec';
-}
-
-const hotword = allConfig.hotwords.active ? new Hotword(allConfig) : null;
-
-
 const polly = new Polly({
   accessKeyId: process.env.AWS_POLLY_AK,
   secretAccessKey: process.env.AWS_POLLY_SECRET,
   region: 'eu-west-1'
 });
 
+const s3 = new S3({
+  accessKeyId: process.env.AWS_S3_KEY,
+  secretAccessKey: process.env.AWS_S3_SECRET
+});
 
 const auth = new Authentication(allConfig);
 
@@ -59,7 +53,7 @@ const sendAudio = (text, assistant: AssistantClient) => {
   polly.synthesizeSpeech(params)
     .on('httpHeaders', function(statusCode, headers) {
       if (statusCode < 300) {
-        var stream = this.response.httpResponse.createUnbufferedStream();
+        const stream = this.response.httpResponse.createUnbufferedStream();
         assistant.requestAssistant(stream);
       }
     })
@@ -67,41 +61,69 @@ const sendAudio = (text, assistant: AssistantClient) => {
     .send();
 };
 
-auth.on('oauth-ready', (oauth2Client) => {
-  allConfig.debug('We have configured credentials');
+const Alexa = require('alexa-sdk');
+const NOT_FOUND = 'Sorry I don\'t know this command';
+const UNHANDLED_RESP = 'Are you talking to me?';
+const ERROR_RESP = 'Oops something went wrong';
 
-  const assistant = new AssistantClient(allConfig, oauth2Client);
+exports.handler = function(event, context, callback) {
+  const alexa = Alexa.handler(event, context);
+  alexa.registerHandlers(handlers);
+  alexa.APP_ID = process.env.APP_ID;
+  alexa.execute();
+};
 
-  allConfig.debug('assistant');
+const callAssistant = function(query, context) {
+  auth.on('oauth-ready', (oauth2Client) => {
+    const assistant = new AssistantClient(allConfig, oauth2Client);
 
-  if ( allConfig.hotwords.active ) {
-    hotword.on('hotword', (match, index) => {
-      process.nextTick(() => {
-        allConfig.debug('assistant');
-        //assistant.requestAssistant();
-      });
+    allConfig.debug('Call assistant', query);
+
+    assistant.on('audio-file', path => {
+      let fileName = path.split('/').pop();
+      allConfig.debug('New audio file', path);
+      try {
+        var params = {ACL:'public-read', Bucket: 'echo-assistant', Key: fileName, Body: fs.createReadStream(path)};
+        s3.upload(params, (err, data) => {
+          allConfig.debug('New audio file uploaded to S3', data, err);
+          if (!err) {
+            allConfig.debug(':tell', `<audio src="${data.Location}" />`);
+            context.emit(':tell', `<audio src="${data.Location}" />`);
+          }
+        });
+      }catch (e) {
+        console.error('Exception while trying to upload to S3', e);
+      }
     });
-
-    hotword.start();
-
-    assistant.on('speaker-closed', () => {
-      // we seem to get this callback slightly before the speaker has finished
-      // which can cause it to be cut off
-      setTimeout(() => {
-        hotword.start();
-      }, 500);
-    });
-  }
-
-  console.log('write something to interact with assistant');
-  process.stdin.setEncoding('utf8');
-
-  process.stdin.on('readable', () => {
-    var chunk = process.stdin.read();
-    if (chunk !== null) {
-      sendAudio(chunk, assistant);
-    }
+    sendAudio(query, assistant);
+    //assistant.requestAssistant(fs.createReadStream('./speech_test.pcm'));
   });
-});
 
-auth.loadCredentials();
+  auth.on('token-needed', () => {
+    context.emit(':tell', 'Token needed');
+  });
+
+  auth.loadCredentials();
+};
+
+//callAssistant('hello', {emit:(d)=>console.log(d)});
+
+export const handlers = {
+  'Assist': function () {
+    const query = this.event.request.intent.slots.query ? this.event.request.intent.slots.query.value : null;
+    const that = this;
+    allConfig.debug('----- Start Assist query: ', query, ' ------');
+
+    if (!query) return this.emit(':tell', 'No query found, please try again');
+
+    callAssistant(query, this);
+  },
+  'Unhandled': function() {
+    allConfig.debug('----- Unhandled query -----', this.event.request);
+    this.emit(':tell', UNHANDLED_RESP);
+  }
+};
+
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException', err);
+});

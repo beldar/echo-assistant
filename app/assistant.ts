@@ -1,25 +1,26 @@
 
 import {Writable, Readable} from 'stream';
-const record = require('node-record-lpcm16');
 import grpc = require('grpc');
 const EmbeddedAssistantClient = require('./google/assistant/embedded/v1alpha1/embedded_assistant_grpc_pb').EmbeddedAssistantClient;
 import fs = require('fs');
 import {Config, AssistantConfig} from './client-config';
+import temp = require('temp');
+import path = require('path');
+import lame = require('lame');
 
 import {
   AudioInConfig, AudioOutConfig, ConverseState,
   ConverseConfig, ConverseRequest, ConverseResponse
 } from './google/assistant/embedded/v1alpha1/embedded_assistant_pb';
-import {SpeakerSequencer} from './speaker-sequencer';
 import {EventEmitter} from 'events';
-
 
 export class AssistantClient extends EventEmitter {
   private currentConversationState;
   private callCreds;
   private assistant;
-  private speaker : SpeakerSequencer;
   private finished : boolean;
+  private tmpStream;
+  private encoder;
 
   constructor( private config: Config, private oauth2Client ) {
     super();
@@ -33,7 +34,7 @@ export class AssistantClient extends EventEmitter {
 
   private setupAssistant() {
     // this file actually comes from node_modules/grpc/etc/roots.pem
-    const caCerts = fs.readFileSync('./ca.crt');
+    const caCerts = fs.readFileSync(path.join(__dirname, 'ca.crt'));
 
     if (!this.config.assistant) {
       this.config.assistant = new AssistantConfig();
@@ -54,7 +55,7 @@ export class AssistantClient extends EventEmitter {
     }
 
     if (!assistantConfig.volumePercent) {
-      assistantConfig.volumePercent = 80;
+      assistantConfig.volumePercent = 100;
     }
 
     const sslCreds = grpc.credentials.createSsl(caCerts);
@@ -70,7 +71,7 @@ export class AssistantClient extends EventEmitter {
     audioInConfig.setSampleRateHertz(this.config.assistant.audioSampleRate);
 
     const audioOutConfig = new AudioOutConfig();
-    audioOutConfig.setSampleRateHertz(this.config.assistant.audioSampleRate);
+    audioOutConfig.setSampleRateHertz(16000);
     audioOutConfig.setEncoding(AudioOutConfig.Encoding.LINEAR16);
     audioOutConfig.setVolumePercentage(80);
 
@@ -95,15 +96,17 @@ export class AssistantClient extends EventEmitter {
       this.config.debug('event', resp.getEventType());
 
       if (resp.getEventType() === ConverseResponse.EventType.END_OF_UTTERANCE) {
-        this.config.debug('end of utterance');
-        record.stop();
+        console.log('end of utterance');
+        //record.stop();
       }
 
       this.emit('event', resp.getEventType());
     }
 
     if (resp.hasAudioOut()) {
-      this.speaker.speakerWrite(resp.getAudioOut().getAudioData());
+      let audio = resp.getAudioOut().getAudioData_asU8();
+      this.encoder.write(new Buffer(audio));
+      //this.speaker.speakerWrite(resp.getAudioOut().getAudioData());
     }
 
     if (resp.hasError()) {
@@ -114,8 +117,7 @@ export class AssistantClient extends EventEmitter {
 
     if (resp.hasResult()) {
       const result = resp.getResult();
-      this.config.debug('request text', result.getSpokenRequestText());
-      this.currentConversationState = result.getConversationState();
+      this.config.debug('> request text', result.getSpokenRequestText())
       this.emit('request-text', result.getSpokenRequestText());
       this.emit('result', result);
     }
@@ -130,8 +132,6 @@ export class AssistantClient extends EventEmitter {
     const size = this.config.assistant.chunkSize;
 
     audioPipe._write = (chunk, enc, next) => {
-      this.config.debug('audio');
-
       if (!chunk.length) {
         this.config.debug('ignoring');
         return;
@@ -176,7 +176,9 @@ export class AssistantClient extends EventEmitter {
         this.config.debug('failed ', err);
       } else {
         this.finished = true;
-        this.speaker.setSpeakerFinished(true);
+        //this.speaker.setSpeakerFinished(true);
+        this.encoder.end();
+        this.emit('audio-file', this.tmpStream.path);
         this.config.debug('finished ');
         this.emit('end');
       }
@@ -195,26 +197,28 @@ export class AssistantClient extends EventEmitter {
     const converseStream = this.setupConversationStream();
     const audioRequestStream = this.setupConversationAudioRequestStream(converseStream);
 
-    this.speaker = new SpeakerSequencer(this.config);
+    this.config.debug('Setting up streams');
 
-    // propagate this out
-    this.speaker.on('speaker-closed', () => {
-      this.emit('speaker-closed');
+    this.tmpStream = temp.createWriteStream({suffix:'.mp3'});
+
+    this.encoder = new lame.Encoder({
+      // input
+      channels: 1,        // 2 channels (left and right)
+      bitDepth: 16,       // 16-bit samples
+      sampleRate: 16000,  // 16000 Hz sample rate
+
+      // output
+      bitRate: 48,
+      outSampleRate: 16000,
+      mode: lame.MONO // STEREO (default), JOINTSTEREO, DUALCHANNEL or MONO
     });
+
+    this.encoder.pipe(this.tmpStream);
 
     stream.pipe(audioRequestStream);
     stream.on('end', () => {
       this.config.debug('closing conversation');
       converseStream.end();
     });
-    // const audio = record.start({verbose: this.config.verbose, recordProgram: this.config.record.programme});
-    //
-    // audio.on('end', () => {
-    // 	this.config.debug('closing conversation');
-    // 	record.stop();
-    // 	converseStream.end();
-    // });
-    //
-    // audio.pipe(audioRequestStream);
   }
 }

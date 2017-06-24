@@ -1,9 +1,9 @@
 {
-  "authentication": {
-    "clientId": "",
-    "clientSecret": "",
-    "credentialsFilePath": "../../creds.json"
-  },
+	"authentication": {
+		"clientId": "",
+		"clientSecret": "",
+		"credentialsFilePath": "./creds.json"
+	},
 
   "hotwords": {
     "hotwords": [
