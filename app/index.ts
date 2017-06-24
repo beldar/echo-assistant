@@ -72,47 +72,57 @@ exports.handler = function(event, context, callback) {
   alexa.execute();
 };
 
-const callAssistant = function(query) {
-  let that = this;
+const callAssistant = function(query, context) {
   auth.on('oauth-ready', (oauth2Client) => {
     const assistant = new AssistantClient(allConfig, oauth2Client);
 
-    allConfig.debug('assistant');
+    allConfig.debug('Call assistant', query);
 
     assistant.on('audio-file', path => {
       let fileName = path.split('/').pop();
-      var params = {ACL:'public-read', Bucket: 'echo-assistant', Key: fileName, Body: fs.createReadStream(path)};
-      s3.upload(params, (err, data) => {
-        console.log(err, data);
-        if (!err) {
-          this.emit(':tell', `<speak><audio src="${data.Location}" /></speak>`)
-        }
-      });
+      allConfig.debug('New audio file', path);
+      try {
+        var params = {ACL:'public-read', Bucket: 'echo-assistant', Key: fileName, Body: fs.createReadStream(path)};
+        s3.upload(params, (err, data) => {
+          allConfig.debug('New audio file uploaded to S3', data, err);
+          if (!err) {
+            allConfig.debug(':tell', `<audio src="${data.Location}" />`);
+            context.emit(':tell', `<audio src="${data.Location}" />`);
+          }
+        });
+      }catch (e) {
+        console.error('Exception while trying to upload to S3', e);
+      }
     });
     sendAudio(query, assistant);
+    //assistant.requestAssistant(fs.createReadStream('./speech_test.pcm'));
   });
 
   auth.on('token-needed', () => {
-    this.emit(':tell', 'Token needed');
+    context.emit(':tell', 'Token needed');
   });
 
   auth.loadCredentials();
 };
 
-//callAssistant('hello');
+//callAssistant('hello', {emit:(d)=>console.log(d)});
 
-const handlers = {
+export const handlers = {
   'Assist': function () {
     const query = this.event.request.intent.slots.query ? this.event.request.intent.slots.query.value : null;
     const that = this;
-    console.log('Execute query: ', query);
+    allConfig.debug('----- Start Assist query: ', query, ' ------');
 
     if (!query) return this.emit(':tell', 'No query found, please try again');
 
-    callAssistant(query);
+    callAssistant(query, this);
   },
   'Unhandled': function() {
-    console.log('Tell:', UNHANDLED_RESP);
+    allConfig.debug('----- Unhandled query -----', this.event.request);
     this.emit(':tell', UNHANDLED_RESP);
   }
 };
+
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException', err);
+});

@@ -1,26 +1,23 @@
 
 import {Writable, Readable} from 'stream';
-//const record = require('node-record-lpcm16');
 import grpc = require('grpc');
 const EmbeddedAssistantClient = require('./google/assistant/embedded/v1alpha1/embedded_assistant_grpc_pb').EmbeddedAssistantClient;
 import fs = require('fs');
 import {Config, AssistantConfig} from './client-config';
 import temp = require('temp');
 import path = require('path');
+import lame = require('lame');
 
 import {
   AudioInConfig, AudioOutConfig, ConverseState,
   ConverseConfig, ConverseRequest, ConverseResponse
 } from './google/assistant/embedded/v1alpha1/embedded_assistant_pb';
-//import {SpeakerSequencer} from './speaker-sequencer';
 import {EventEmitter} from 'events';
-//temp.track();
 
 export class AssistantClient extends EventEmitter {
   private currentConversationState: Uint8Array;
   private callCreds;
   private assistant;
-  //private speaker : SpeakerSequencer;
   private finished : boolean;
   private tmpStream;
   private encoder;
@@ -58,7 +55,7 @@ export class AssistantClient extends EventEmitter {
     }
 
     if (!assistantConfig.volumePercent) {
-      assistantConfig.volumePercent = 80;
+      assistantConfig.volumePercent = 100;
     }
 
     const sslCreds = grpc.credentials.createSsl(caCerts);
@@ -74,8 +71,8 @@ export class AssistantClient extends EventEmitter {
     audioInConfig.setSampleRateHertz(this.config.assistant.audioSampleRate);
 
     const audioOutConfig = new AudioOutConfig();
-    audioOutConfig.setSampleRateHertz(24000);
-    audioOutConfig.setEncoding(AudioOutConfig.Encoding.MP3);
+    audioOutConfig.setSampleRateHertz(16000);
+    audioOutConfig.setEncoding(AudioOutConfig.Encoding.LINEAR16);
     audioOutConfig.setVolumePercentage(80);
 
     const converseConfig = new ConverseConfig();
@@ -108,7 +105,7 @@ export class AssistantClient extends EventEmitter {
 
     if (resp.hasAudioOut()) {
       let audio = resp.getAudioOut().getAudioData_asU8();
-      this.tmpStream.write(new Buffer(audio));
+      this.encoder.write(new Buffer(audio));
       //this.speaker.speakerWrite(resp.getAudioOut().getAudioData());
     }
 
@@ -122,8 +119,7 @@ export class AssistantClient extends EventEmitter {
 
     if (resp.hasResult()) {
       const result = resp.getResult();
-      console.log(result.toObject());
-      console.log('request text', result.getSpokenRequestText());
+      this.config.debug('> request text', result.getSpokenRequestText())
       this.emit('request-text', result.getSpokenRequestText());
       this.emit('result', result);
     }
@@ -138,8 +134,6 @@ export class AssistantClient extends EventEmitter {
     const size = this.config.assistant.chunkSize;
 
     audioPipe._write = (chunk, enc, next) => {
-      this.config.debug('audio');
-
       if (!chunk.length) {
         this.config.debug('ignoring');
         return;
@@ -186,7 +180,7 @@ export class AssistantClient extends EventEmitter {
       } else {
         this.finished = true;
         //this.speaker.setSpeakerFinished(true);
-        this.tmpStream.end();
+        this.encoder.end();
         this.emit('audio-file', this.tmpStream.path);
         this.config.debug('finished ');
         this.emit('end');
@@ -206,30 +200,28 @@ export class AssistantClient extends EventEmitter {
     const converseStream = this.setupConversationStream();
     const audioRequestStream = this.setupConversationAudioRequestStream(converseStream);
 
-    //this.speaker = new SpeakerSequencer(this.config);
-
-    // propagate this out
-    // this.speaker.on('speaker-closed', () => {
-    //   this.emit('speaker-closed');
-    // });
-
     this.config.debug('Setting up streams');
 
     this.tmpStream = temp.createWriteStream({suffix:'.mp3'});
+
+    this.encoder = new lame.Encoder({
+      // input
+      channels: 1,        // 2 channels (left and right)
+      bitDepth: 16,       // 16-bit samples
+      sampleRate: 16000,  // 16000 Hz sample rate
+
+      // output
+      bitRate: 48,
+      outSampleRate: 16000,
+      mode: lame.MONO // STEREO (default), JOINTSTEREO, DUALCHANNEL or MONO
+    });
+
+    this.encoder.pipe(this.tmpStream);
 
     stream.pipe(audioRequestStream);
     stream.on('end', () => {
       this.config.debug('closing conversation');
       converseStream.end();
     });
-    // const audio = record.start({verbose: this.config.verbose, recordProgram: this.config.record.programme});
-    //
-    // audio.on('end', () => {
-    // 	this.config.debug('closing conversation');
-    // 	record.stop();
-    // 	converseStream.end();
-    // });
-    //
-    // audio.pipe(audioRequestStream);
   }
 }
