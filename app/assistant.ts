@@ -96,8 +96,7 @@ export class AssistantClient extends EventEmitter {
       this.config.debug('event', resp.getEventType());
 
       if (resp.getEventType() === ConverseResponse.EventType.END_OF_UTTERANCE) {
-        console.log('end of utterance');
-        //record.stop();
+        this.config.debug('end of utterance');
       }
 
       this.emit('event', resp.getEventType());
@@ -106,7 +105,6 @@ export class AssistantClient extends EventEmitter {
     if (resp.hasAudioOut()) {
       let audio = resp.getAudioOut().getAudioData_asU8();
       this.encoder.write(new Buffer(audio));
-      //this.speaker.speakerWrite(resp.getAudioOut().getAudioData());
     }
 
     if (resp.hasError()) {
@@ -176,10 +174,9 @@ export class AssistantClient extends EventEmitter {
         this.config.debug('failed ', err);
       } else {
         this.finished = true;
-        //this.speaker.setSpeakerFinished(true);
         this.encoder.end();
         this.emit('audio-file', this.tmpStream.path);
-        this.config.debug('finished ');
+        this.config.debug('finished');
         this.emit('end');
       }
     });
@@ -203,14 +200,14 @@ export class AssistantClient extends EventEmitter {
 
     this.encoder = new lame.Encoder({
       // input
-      channels: 1,        // 2 channels (left and right)
+      channels: 1,        // 1 channel
       bitDepth: 16,       // 16-bit samples
       sampleRate: 16000,  // 16000 Hz sample rate
 
       // output
       bitRate: 48,
       outSampleRate: 16000,
-      mode: lame.MONO // STEREO (default), JOINTSTEREO, DUALCHANNEL or MONO
+      mode: lame.MONO
     });
 
     this.encoder.pipe(this.tmpStream);

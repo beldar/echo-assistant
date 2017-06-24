@@ -3,9 +3,22 @@ import GoogleAuth = require('google-auth-library');
 import {AssistantClient} from './assistant';
 import {Authentication} from './authentication';
 import fs = require('fs');
-const { Polly, S3 } = require('aws-sdk');
+import { Polly, S3 } from 'aws-sdk';
+import Alexa from 'alexa-sdk';
+import debug from'debug';
 
-const debug = require('debug');
+const TESTING = false;
+
+const polly = new Polly({
+  accessKeyId: process.env.AWS_POLLY_AK,
+  secretAccessKey: process.env.AWS_POLLY_SECRET,
+  region: 'eu-west-1'
+});
+
+const s3 = new S3({
+  accessKeyId: process.env.AWS_S3_KEY,
+  secretAccessKey: process.env.AWS_S3_SECRET
+});
 
 let allConfig;
 
@@ -27,17 +40,6 @@ allConfig.authentication.clientSecret = process.env.ASSISTANT_CLIENT_SECRET;
 if (process.env.DEBUG === 'node-assistant') {
   allConfig.verbose = true; // for other logging
 }
-
-const polly = new Polly({
-  accessKeyId: process.env.AWS_POLLY_AK,
-  secretAccessKey: process.env.AWS_POLLY_SECRET,
-  region: 'eu-west-1'
-});
-
-const s3 = new S3({
-  accessKeyId: process.env.AWS_S3_KEY,
-  secretAccessKey: process.env.AWS_S3_SECRET
-});
 
 const auth = new Authentication(allConfig);
 
@@ -61,7 +63,6 @@ const sendAudio = (text, assistant: AssistantClient) => {
     .send();
 };
 
-const Alexa = require('alexa-sdk');
 const NOT_FOUND = 'Sorry I don\'t know this command';
 const UNHANDLED_RESP = 'Are you talking to me?';
 const ERROR_RESP = 'Oops something went wrong';
@@ -95,8 +96,11 @@ const callAssistant = function(query, context) {
         console.error('Exception while trying to upload to S3', e);
       }
     });
-    sendAudio(query, assistant);
-    //assistant.requestAssistant(fs.createReadStream('./speech_test.pcm'));
+    if ( TESTING ) {
+      assistant.requestAssistant(fs.createReadStream('./resources/speech_test.pcm'));
+    } else {
+      sendAudio(query, assistant);
+    }
   });
 
   auth.on('token-needed', () => {
@@ -106,7 +110,7 @@ const callAssistant = function(query, context) {
   auth.loadCredentials();
 };
 
-//callAssistant('hello', {emit:(d)=>console.log(d)});
+if ( TESTING ) callAssistant('hello', { emit: (a,b)=> allConfig.debug(a,b) });
 
 export const handlers = {
   'Assist': function () {
