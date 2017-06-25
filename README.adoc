@@ -41,7 +41,7 @@ DEBUG        # Debug key (default: 'node-assistant')
 
 - When running this code on AWS Lambda context the node modules with bindings of this project need to be
 compiled for a Linux target instead of MacOS or Windows, therefore before zipping and uploading this
-to AWS you need to do that extra step (if you're not already in Linux). The way I did it was with the help of Docker, by [following this helpful article](https://medium.freecodecamp.com/escaping-lambda-function-hell-using-docker-40b187ec1e48)
+to AWS you need to do that extra step (if you're not already in Linux). The way I did it was with the help of Docker, by https://medium.freecodecamp.com/escaping-lambda-function-hell-using-docker-40b187ec1e48[following this helpful article]
  I was able to compile the `node_modules` folder inside an Ubuntu container and package that for AWS.
 
 - You can also use the `payload.json` file as a tests event on Lambda.
