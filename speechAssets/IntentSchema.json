@@ -1,0 +1,80 @@
+{
+  "intents": [
+    {
+      "name": "AMAZON.CancelIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.HelpIntent",
+      "samples": []
+    },
+    {
+      "name": "AMAZON.StopIntent",
+      "samples": []
+    },
+    {
+      "name": "Assist",
+      "samples": [
+        "{query}",
+        "to {query} ",
+        "about {query} "
+      ],
+      "slots": [
+        {
+          "name": "query",
+          "type": "String",
+          "samples": []
+        }
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "String",
+      "values": [
+        {
+          "id": null,
+          "name": {
+            "value": "any",
+            "synonyms": []
+          }
+        },
+        {
+          "id": null,
+          "name": {
+            "value": "any string",
+            "synonyms": []
+          }
+        },
+        {
+          "id": null,
+          "name": {
+            "value": "what's the weather like",
+            "synonyms": []
+          }
+        },
+        {
+          "id": null,
+          "name": {
+            "value": "thank you",
+            "synonyms": []
+          }
+        },
+        {
+          "id": null,
+          "name": {
+            "value": "yeah",
+            "synonyms": []
+          }
+        },
+        {
+          "id": null,
+          "name": {
+            "value": "why not",
+            "synonyms": []
+          }
+        }
+      ]
+    }
+  ]
+}
