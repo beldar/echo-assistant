@@ -1,8 +1,8 @@
-= node-assistant
+= echo-assistant
 
 == overview
 
-This is a nodejs + typescript version of the Assistant from Google (tm). It uses the alpha sdk to talk to it,
+This is a nodejs + typescript Alexa Skill interfacing with the Assistant from Google (tm). It uses the alpha sdk to talk to it,
 so it may stop working with major revision changes.
 
 [NOTE]
@@ -11,12 +11,31 @@ If you haven't come across Typescript before, it is just sugar on ES.next. If yo
 so you can just use that and start modifying it if you like.
 ====
 
-Particularly, this uses hotword detection. That is, it *must* use hotword detection. On starting it, you say "snowboy"
-and it will start listening to you, stream it to Google (tm) and stream the resulting audio.
+It uses Amazon Polly to translate text into voice that its send to the Assistant SDK, and the resulting audio is
+encoded and stored on Amazon S3 for later playback on the Amazon Echo (Alexa).
 
-Want to use your own hotword? Go to https://snowboy.kitt.ai/[Snowboy] and record your own, replace it in the config file.
-At the moment, you can even have multiple hotwords. They all trigger the assistant.
+You'll need some environmental variables set up to make it run:
 
+```bash
+# Amazon Polly for TTS
+AWS_POLLY_AK      # Access Key
+AWS_POLLY_SECRET  # Secret
+
+# Amazon S3 for transient audio file storage
+AWS_S3_KEY        # Access Key
+AWS_S3_SECRET     # Secret
+
+# Google Assistant credentials
+ASSISTANT_CLIENT_ID     # Client Id
+ASSISTANT_CLIENT_SECRET # Secret
+
+# Alexa
+APP_ID    # Application ID
+
+# Internal app vars
+VOICE_CONFIG # Voice config file path (default: ./config.json)
+DEBUG        # Debug key (default: 'node-assistant')
+```
 == installation
 
 I use yarn, but you should be able to use npm.
@@ -25,7 +44,7 @@ so
 
 ----
 npm|yarn install
-export VOICE_CONFIG=../../config.json
+export VOICE_CONFIG=./config.json
 ----
 
 == building
@@ -67,7 +86,7 @@ and save it.
 
 == recommended changes
 
-You can override the location of your credentials.json - it's location is in the config.json file. I would recommend
+You can override the location of your creds.json - it's location is in the config.json file. I would recommend
 having both of them outside the folder you are using for this code.
 
 There are a lot more configurable fields, it is based off the Java implementation of the Assistant. Go have a look at the client-config.ts
@@ -81,14 +100,4 @@ audible acknowledgement). You can turn it off by leaving out the sound file. Tha
 === what else?
 
 - I haven't tested this outside of MacOS, I will test it on a Raspberry Pi next.
-- node-speaker appears to have a bug on MacOS, it will occasionally seg-fault. Since this isn't a sensible deploy
- scenario, i'm not too worried.
-- I want to add in support for the Google Speech API and hand-off to https://api.ai[api.ai]. It supports multiple hotwords,
- so this is sensible.
 - Obviously I'd love to write spec tests for this, but I was more keen on getting it actually working.
-
-=== finally
-
-Really appreciate the team at Google for making this available, and the https://snowboy.kitt.ai/[Snowboy] team for making such a great library
-for hotword detection. If I ever make something commercial (and believe me, I only don't have the backing!) I would
-use you guys and pay in a heart beat.
