@@ -1,9 +1,11 @@
-= node-assistant
+= echo-assistant cli
 
 == overview
 
 This is a nodejs + typescript version of the Assistant from Google (tm). It uses the alpha sdk to talk to it,
 so it may stop working with major revision changes.
+
+This app provides a command line interface translating text into audio using Amazon Polly, and playing the response on your speakers.
 
 [NOTE]
 ====
@@ -11,11 +13,14 @@ If you haven't come across Typescript before, it is just sugar on ES.next. If yo
 so you can just use that and start modifying it if you like.
 ====
 
-Particularly, this uses hotword detection. That is, it *must* use hotword detection. On starting it, you say "snowboy"
-and it will start listening to you, stream it to Google (tm) and stream the resulting audio.
+You also need to have some environmental variables set up, these include:
 
-Want to use your own hotword? Go to https://snowboy.kitt.ai/[Snowboy] and record your own, replace it in the config file.
-At the moment, you can even have multiple hotwords. They all trigger the assistant.
+```
+ASSISTANT_CLIENT_ID       // Assistant Client ID
+ASSISTANT_CLIENT_SECRET   // Assistant Secret
+AWS_POLLY_AK              //Amazon Polly Access Key
+AWS_POLLY_SECRET          //Amazon Polly Secret
+```
 
 == installation
 
@@ -25,7 +30,7 @@ so
 
 ----
 npm|yarn install
-export VOICE_CONFIG=../../config.json
+export VOICE_CONFIG=./config.json
 ----
 
 == building
@@ -67,16 +72,11 @@ and save it.
 
 == recommended changes
 
-You can override the location of your credentials.json - it's location is in the config.json file. I would recommend
+You can override the location of your creds.json - it's location is in the config.json file. I would recommend
 having both of them outside the folder you are using for this code.
 
 There are a lot more configurable fields, it is based off the Java implementation of the Assistant. Go have a look at the client-config.ts
 file to see what you can change.
-
-== hotwords
-
-The hotword stuff makes a 'ding' if it triggers. Its one of the missing things on Home that annoys me (the lack of the
-audible acknowledgement). You can turn it off by leaving out the sound file. That also makes it more reliable on MacOS.
 
 === what else?
 
@@ -86,9 +86,3 @@ audible acknowledgement). You can turn it off by leaving out the sound file. Tha
 - I want to add in support for the Google Speech API and hand-off to https://api.ai[api.ai]. It supports multiple hotwords,
  so this is sensible.
 - Obviously I'd love to write spec tests for this, but I was more keen on getting it actually working.
-
-=== finally
-
-Really appreciate the team at Google for making this available, and the https://snowboy.kitt.ai/[Snowboy] team for making such a great library
-for hotword detection. If I ever make something commercial (and believe me, I only don't have the backing!) I would
-use you guys and pay in a heart beat.
