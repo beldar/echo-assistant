@@ -69,23 +69,49 @@ const sendAudio = (text, assistant: AssistantClient) => {
 };
 
 const assertConstants = ( context ) => {
-  if ( !AWS_POLLY_AK ) context.emit(':tell', 'Amazon Polly Access Key environmental variable is not set');
-  if ( !AWS_POLLY_SECRET ) context.emit(':tell', 'Amazon Polly Secret environmental variable is not set');
-  if ( !AWS_S3_KEY ) context.emit(':tell', 'Amazon S3 Access Key environmental variable is not set');
-  if ( !AWS_S3_SECRET ) context.emit(':tell', 'Amazon S3 Secret environmental variable is not set');
-  if ( !ASSISTANT_CLIENT_ID ) context.emit(':tell', 'Google Assistant Client ID environmental variable is not set');
-  if ( !ASSISTANT_CLIENT_SECRET ) context.emit(':tell', 'Google Assistant Client Secret environmental variable is not set');
-  if ( !REDIRECT_URL ) context.emit(':tell', 'Redirect URL environmental variable is not set');
+  if ( !AWS_POLLY_AK ) {
+    allConfig.debug('AWS_POLLY_AK is not set');
+    context.emit(':tell', 'Amazon Polly Access Key environmental variable is not set');
+    return false;
+  }
 
-  return (
-     !AWS_POLLY_AK
-  || !AWS_POLLY_SECRET
-  || !AWS_S3_KEY
-  || !AWS_S3_SECRET
-  || !ASSISTANT_CLIENT_ID
-  || !ASSISTANT_CLIENT_SECRET
-  || !REDIRECT_URL
-  );
+  if ( !AWS_POLLY_SECRET ) {
+    allConfig.debug('AWS_POLLY_SECRET is not set');
+    context.emit(':tell', 'Amazon Polly Secret environmental variable is not set');
+    return false;
+  }
+
+  if ( !AWS_S3_KEY ) {
+    allConfig.debug('AWS_S3_KEY is not set');
+    context.emit(':tell', 'Amazon S3 Access Key environmental variable is not set');
+    return false;
+  }
+
+  if ( !AWS_S3_SECRET ) {
+    allConfig.debug('AWS_S3_SECRET is not set');
+    context.emit(':tell', 'Amazon S3 Secret environmental variable is not set');
+    return false;
+  }
+
+  if ( !ASSISTANT_CLIENT_ID ) {
+    allConfig.debug('ASSISTANT_CLIENT_ID is not set');
+    context.emit(':tell', 'Google Assistant Client ID environmental variable is not set');
+    return false;
+  }
+
+  if ( !ASSISTANT_CLIENT_SECRET ) {
+    allConfig.debug('ASSISTANT_CLIENT_SECRET is not set');
+    context.emit(':tell', 'Google Assistant Client Secret environmental variable is not set');
+    return false;
+  }
+
+  if ( !REDIRECT_URL ) {
+    allConfig.debug('REDIRECT_URL is not set');
+    context.emit(':tell', 'Redirect URL environmental variable is not set');
+    return false;
+  }
+
+  return true;;
 };
 
 const callAssistant = function(query, context, ACCESS_TOKEN) {
@@ -128,23 +154,42 @@ if ( TESTING ) callAssistant('hello', { emit: (a,b)=> allConfig.debug(a,b) }, un
 
 export const handlers = {
   'LaunchRequest': function() {
-    if (!assertConstants( this )) return;
-    const ACCESS_TOKEN = this.event.session.user.accessToken;
-    if (!ACCESS_TOKEN) return this.emit(':tellWithLinkAccountCard', LINK_ACCOUNT);
-    this.emit(':ask', 'How can I help you?');
+    allConfig.debug('---- LaunchRequest handler');
+
+    if (assertConstants( this )) {
+      allConfig.debug('All env vars are set');
+      const ACCESS_TOKEN = this.event.session.user.accessToken;
+      if (!ACCESS_TOKEN) {
+        allConfig.debug('Access Token not found, tellWithLinkAccountCard', LINK_ACCOUNT);
+        this.emit(':tellWithLinkAccountCard', LINK_ACCOUNT);
+      } else {
+        allConfig.debug('Access Token found, carry on');
+        this.emit(':ask', 'How can I help you?');
+      }
+    } else {
+      allConfig.debug('Some env vars are NOT set!');
+    }
   },
 
   'Assist': function () {
     const QUERY = this.event.request.intent.slots.query ? this.event.request.intent.slots.query.value : null;
     const ACCESS_TOKEN = this.event.session.user.accessToken;
 
-    allConfig.debug('----- Start Assist query: ', QUERY, ' ------');
+    allConfig.debug('---- Assist handler', QUERY);
 
-    if (!QUERY) return this.emit(':tell', 'No query found, please try again');
-    if (!assertConstants( this )) return;
-    if (!ACCESS_TOKEN) return this.emit(':tellWithLinkAccountCard', LINK_ACCOUNT);
-
-    callAssistant(QUERY, this, ACCESS_TOKEN);
+    if (!QUERY) {
+      this.emit(':tell', 'No query found, please try again');
+    } else if (assertConstants( this )) {
+      if (!ACCESS_TOKEN) {
+        allConfig.debug('Access Token not found, tellWithLinkAccountCard', LINK_ACCOUNT);
+        this.emit(':tellWithLinkAccountCard', LINK_ACCOUNT);
+      } else {
+        allConfig.debug('Access Token found, carry on');
+        callAssistant(QUERY, this, ACCESS_TOKEN);
+      }
+    } else {
+      allConfig.debug('Some env vars are NOT set!');
+    }
   },
 
   'Unhandled': function() {
