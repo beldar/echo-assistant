@@ -5,9 +5,9 @@
     "allowJs": true,
     "removeComments": true,
     "preserveConstEnums": true,
-    "sourceMap": true,
+    "sourceMap": false,
     "module": "commonjs",
-    "outDir": "target",
+    "outDir": "dist/app",
     "newLine": "lf",
     "noEmitOnError": true,
     "experimentalDecorators": true,
@@ -15,7 +15,6 @@
   },
   "include": [
     "app/**/*",
-    "spec/**/*",
     "migrations/*"
   ],
   "types": [
@@ -24,7 +23,7 @@
   ],
   "exclude": [
     "node_modules",
-    "target/dist"
+    "dist",
+    "target"
   ]
-
 }

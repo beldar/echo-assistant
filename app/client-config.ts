@@ -1,4 +1,3 @@
-
 export class AuthenticationConfig {
   public clientId: string;
   public clientSecret: string;
@@ -10,18 +9,6 @@ export class AuthenticationConfig {
   public urlGoogleAccount: string;
   public credentialsFilePath: string;
   public maxDelayBeforeRefresh: number;
-}
-
-export class HotwordConfig {
-  public hotwordFile : string;
-  public soundFile : string;
-  public name : string;
-}
-
-export class HotwordsConfig {
-  public hotwordFiles : string[];
-  public hotwords : Array<HotwordConfig>;
-  public active : boolean;
 }
 
 export class AssistantConfig {
@@ -37,10 +24,6 @@ export class AudioConfig {
   public channels : number;
 }
 
-export class RecordConfig {
-  public programme : string;
-}
-
 export class Config {
   public debug : any; // comes from index.ts
   public error: any;
@@ -48,6 +31,4 @@ export class Config {
   public authentication: AuthenticationConfig;
   public assistant : AssistantConfig;
   public audio : AudioConfig;
-  public record : RecordConfig;
-  public hotwords : HotwordsConfig;
 }

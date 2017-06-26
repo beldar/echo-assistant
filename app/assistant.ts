@@ -188,7 +188,7 @@ export class AssistantClient extends EventEmitter {
 
   public requestAssistant(stream: Readable ) {
     if ( !stream ) {
-      this.config.debug('No stream passed');
+      this.config.error('No stream passed');
     }
 
     const converseStream = this.setupConversationStream();

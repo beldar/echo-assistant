@@ -1,21 +1,22 @@
 {
   "name": "node-assistant",
   "version": "1.1.0",
-  "main": "target/app/index.js",
+  "main": "dist/app/index.js",
   "license": "MIT",
   "scripts": {
-    "clean": "rm -rf target",
+    "clean": "rm -rf dist",
     "prebuild": "",
-    "copy-js": "copyfiles app/**/*.js app/ca.crt app/resources/**/* target/ && copyfiles config.json creds.json target/app",
+    "copy-js": "copyfiles app/**/*.js app/ca.crt app/resources/**/* dist && copyfiles package.json payload.json dist/app",
     "build": "yarn run copy-js && yarn run tsc",
     "build:watch": "yarn run build -- -- -w",
-    "service": "cd ./target/app && node $NODE_DEBUG_OPTION ./service.js -p ../../dev-config.yaml",
+    "build:deps": "node dist/app/build-deps install --prefix ./dist/app --production",
+    "build:zip": "cd dist/app && zip -r assistant.zip .",
     "test": "yarn run mocha -- --opts mocha.opts",
     "test:watch": "yarn run mocha --opts mocha.opts --watch",
     "mocha": "node ./node_modules/mocha/bin/mocha",
     "tsc": "node ./node_modules/typescript/bin/tsc",
     "lint": "node ./node_modules/tslint/bin/tslint -r ./node_modules/tslint-microsoft-contrib/ \"app/**/*.ts\" -e \"app/generated-code/**/*\"",
-    "start": "DEBUG=node-assistant VOICE_CONFIG=./config node target/app/index"
+    "start": "DEBUG=node-assistant node dist/app/index"
   },
   "devDependencies": {
     "tslint": "4.5.1",

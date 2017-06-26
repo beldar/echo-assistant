@@ -1,8 +1,6 @@
-
 import fs = require('fs');
 import {Config} from './client-config';
 import {EventEmitter} from 'events';
-import readline = require('readline');
 const google = require('googleapis');
 const OAuth2 = google.auth.OAuth2;
 
@@ -12,7 +10,6 @@ class Credentials {
   public token_type: string;
   public expiry_date: number;
 }
-
 
 export class Authentication extends EventEmitter {
   private oauth2Client;
@@ -69,55 +66,9 @@ export class Authentication extends EventEmitter {
     file.end();
   }
 
-  public loadCredentials() {
-    const auth = this.config.authentication;
-
-    console.log('trying to load credentials... ', auth.credentialsFilePath, fs.existsSync(auth.credentialsFilePath));
-
-    if (fs.existsSync(auth.credentialsFilePath)) {
-      this.credentials = <Credentials>require(auth.credentialsFilePath);
-      this.oauth2Client.setCredentials(this.credentials);
-    }
-
-    if (!this.credentials || !this.credentials.access_token) {
-      const url = this.oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-
-        // whatever scopes they need, at least the Assistant one normally
-        scope: auth.scopes
-      });
-
-      console.log('Please copy the below URL into your browser and paste in the reply');
-      console.log(url);
-
-      this.emit('token-needed', url);
-
-      const codeReader = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        terminal: false
-      });
-
-      codeReader.question('code: ', (code) => {
-        if (!code) {
-          process.exit(-1);
-        }
-
-        this.config.debug('using code ', code, 'to get tokens');
-
-        this.oauth2Client.getToken(code, (err, tokens) => {
-          // Now tokens contains an access_token and an optional refresh_token. Save them.
-          console.log('got tokens %j', tokens);
-
-          if (!err) {
-            this.saveCredentials(<Credentials>tokens);
-            this.emit('oauth-ready', this.oauth2Client);
-          }
-        });
-      });
-    } else {
-      this.emit('oauth-ready', this.oauth2Client);
-    }
+  public loadCredentials(access_token) {
+    this.oauth2Client.setCredentials({ access_token });
+    this.emit('oauth-ready', this.oauth2Client);
   }
 
   public getClient() {
