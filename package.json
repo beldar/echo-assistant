@@ -11,6 +11,7 @@
     "build:watch": "yarn run build -- -- -w",
     "build:deps": "node dist/app/build-deps install --prefix ./dist/app --production",
     "build:zip": "cd dist/app && zip -r assistant.zip .",
+    "build:all": "yarn run copy-js && yarn run tsc && yarn run build:deps && yarn run build:zip",
     "test": "yarn run mocha -- --opts mocha.opts",
     "test:watch": "yarn run mocha --opts mocha.opts --watch",
     "mocha": "node ./node_modules/mocha/bin/mocha",

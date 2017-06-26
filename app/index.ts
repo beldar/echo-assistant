@@ -4,8 +4,8 @@ import {AssistantClient} from './assistant';
 import {Authentication} from './authentication';
 import fs = require('fs');
 import { Polly, S3 } from 'aws-sdk';
-import Alexa from 'alexa-sdk';
 import debug from'debug';
+const Alexa = require('alexa-sdk');
 
 /** Constant declarations **/
 const TESTING                 = process.env.TESTING || false,
@@ -126,7 +126,7 @@ const callAssistant = function(query, context, ACCESS_TOKEN) {
 
 if ( TESTING ) callAssistant('hello', { emit: (a,b)=> allConfig.debug(a,b) }, undefined);
 
-const handlers = {
+export const handlers = {
   'LaunchRequest': function() {
     if (!assertConstants( this )) return;
     const ACCESS_TOKEN = this.event.session.user.accessToken;
@@ -155,8 +155,8 @@ const handlers = {
 
 exports.handler = function(event, context, callback) {
   const alexa = Alexa.handler(event, context);
+  alexa.appId = APP_ID;
   alexa.registerHandlers(handlers);
-  alexa.APP_ID = APP_ID;
   alexa.execute();
 };
 
