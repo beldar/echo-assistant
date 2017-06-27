@@ -6,7 +6,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "prebuild": "",
-    "copy-js": "copyfiles app/**/*.js app/ca.crt app/resources/**/* dist && copyfiles package.json payload.json dist/app",
+    "copy-js": "copyfiles app/**/*.js app/ca.crt app/resources/**/* dist && copyfiles creds.json package.json payload.json dist/app",
     "build": "yarn run copy-js && yarn run tsc",
     "build:watch": "yarn run build -- -- -w",
     "build:deps": "node dist/app/build-deps install --prefix ./dist/app --production",

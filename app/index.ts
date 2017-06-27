@@ -1,10 +1,11 @@
 import {Config, AuthenticationConfig} from './client-config';
-import GoogleAuth = require('google-auth-library');
 import {AssistantClient} from './assistant';
 import {Authentication} from './authentication';
 import fs = require('fs');
 import { Polly, S3 } from 'aws-sdk';
 import debug from'debug';
+import {PassThrough} from 'stream';
+
 const Alexa = require('alexa-sdk');
 
 /** Constant declarations **/
@@ -13,26 +14,15 @@ const TESTING                 = process.env.TESTING || false,
       UNHANDLED_RESP          = 'Are you talking to me?',
       ERROR_RESP              = 'Oops something went wrong',
       LINK_ACCOUNT            = 'You must link your Google account to use this skill. Please use the link in the Alexa app to authorise your Google Account.',
-      AWS_POLLY_AK            = process.env.AWS_POLLY_AK,
-      AWS_POLLY_SECRET        = process.env.AWS_POLLY_SECRET,
-      AWS_S3_KEY              = process.env.AWS_S3_KEY,
-      AWS_S3_SECRET           = process.env.AWS_S3_SECRET,
+      AWS_REGION              = process.env.AWS_REGION || 'eu-west-1',
+      AWS_S3_BUCKET           = process.env.AWS_S3_BUCKET,
       ASSISTANT_CLIENT_ID     = process.env.ASSISTANT_CLIENT_ID,
       ASSISTANT_CLIENT_SECRET = process.env.ASSISTANT_CLIENT_SECRET,
       REDIRECT_URL            = process.env.REDIRECT_URL,
       APP_ID                  = process.env.APP_ID;
 
-const polly = new Polly({
-  accessKeyId: AWS_POLLY_AK,
-  secretAccessKey: AWS_POLLY_SECRET,
-  region: 'eu-west-1'
-});
-
-const s3 = new S3({
-  accessKeyId: AWS_S3_KEY,
-  secretAccessKey: AWS_S3_SECRET
-});
-
+const polly = new Polly({region: AWS_REGION});
+const s3 = new S3({region: AWS_REGION});
 const allConfig = new Config();
 
 allConfig.debug = debug('node-assistant');
@@ -48,7 +38,7 @@ if (process.env.DEBUG === 'node-assistant') {
 
 const auth = new Authentication(allConfig);
 
-const sendAudio = (text, assistant: AssistantClient) => {
+const sendAudio = (text, assistant: AssistantClient, context) => {
   let params = {
     OutputFormat: "pcm",
     SampleRate: "16000",
@@ -61,7 +51,7 @@ const sendAudio = (text, assistant: AssistantClient) => {
     .on('httpHeaders', function(statusCode, headers) {
       if (statusCode < 300) {
         const stream = this.response.httpResponse.createUnbufferedStream();
-        assistant.requestAssistant(stream);
+        assistant.requestAssistant(stream, getS3Stream( context ));
       }
     })
     .on('error', (response) => allConfig.error('Error while querying Polly', response))
@@ -69,27 +59,9 @@ const sendAudio = (text, assistant: AssistantClient) => {
 };
 
 const assertConstants = ( context ) => {
-  if ( !AWS_POLLY_AK ) {
-    allConfig.debug('AWS_POLLY_AK is not set');
-    context.emit(':tell', 'Amazon Polly Access Key environmental variable is not set');
-    return false;
-  }
-
-  if ( !AWS_POLLY_SECRET ) {
-    allConfig.debug('AWS_POLLY_SECRET is not set');
-    context.emit(':tell', 'Amazon Polly Secret environmental variable is not set');
-    return false;
-  }
-
-  if ( !AWS_S3_KEY ) {
-    allConfig.debug('AWS_S3_KEY is not set');
-    context.emit(':tell', 'Amazon S3 Access Key environmental variable is not set');
-    return false;
-  }
-
-  if ( !AWS_S3_SECRET ) {
-    allConfig.debug('AWS_S3_SECRET is not set');
-    context.emit(':tell', 'Amazon S3 Secret environmental variable is not set');
+  if ( !AWS_S3_BUCKET ) {
+    allConfig.debug('AWS_S3_BUCKET is not set');
+    context.emit(':tell', 'Amazon S3 Bucket environmental variable is not set');
     return false;
   }
 
@@ -111,7 +83,21 @@ const assertConstants = ( context ) => {
     return false;
   }
 
-  return true;;
+  return true;
+};
+
+const getS3Stream = function( context ) {
+  const pass = new PassThrough();
+  const fileName = Date.now() + '.mp3';
+  const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: pass};
+  s3.upload(params, (err, data) => {
+    allConfig.debug('New audio file uploaded to S3', data, err);
+    if (!err) {
+      allConfig.debug(':tell', `<audio src="${data.Location}" />`);
+      context.emit(':tell', `<audio src="${data.Location}" />`);
+    }
+  });
+  return pass;
 };
 
 const callAssistant = function(query, context, ACCESS_TOKEN) {
@@ -120,37 +106,20 @@ const callAssistant = function(query, context, ACCESS_TOKEN) {
 
     allConfig.debug('Call assistant', query);
 
-    assistant.on('audio-file', path => {
-      let fileName = path.split('/').pop();
-      allConfig.debug('New audio file', path);
-      try {
-        var params = {ACL:'public-read', Bucket: 'echo-assistant', Key: fileName, Body: fs.createReadStream(path)};
-        s3.upload(params, (err, data) => {
-          allConfig.debug('New audio file uploaded to S3', data, err);
-          if (!err) {
-            allConfig.debug(':tell', `<audio src="${data.Location}" />`);
-            context.emit(':tell', `<audio src="${data.Location}" />`);
-          }
-        });
-      }catch (e) {
-        allConfig.error('Exception while trying to upload to S3', e);
-      }
-    });
-    if ( TESTING ) {
-      assistant.requestAssistant(fs.createReadStream('./resources/speech_test.pcm'));
-    } else {
-      sendAudio(query, assistant);
-    }
-  });
-
-  auth.on('token-needed', () => {
-    context.emit(':tell', 'Token needed');
+    sendAudio(query, assistant, context);
   });
 
   auth.loadCredentials(ACCESS_TOKEN);
 };
 
-if ( TESTING ) callAssistant('hello', { emit: (a,b)=> allConfig.debug(a,b) }, undefined);
+if ( TESTING ) {
+  const query = 'hello';
+  const context = { emit: (a,b)=> allConfig.debug(a,b) };
+  const client = require('googleapis').google.auth.OAuth2;
+  client.setCredentials(require('./creds.json'));
+  const assistant = new AssistantClient(allConfig, client);
+  assistant.requestAssistant(fs.createReadStream('./resources/speech_test.pcm'), getS3Stream( context ));
+}
 
 export const handlers = {
   'LaunchRequest': function() {

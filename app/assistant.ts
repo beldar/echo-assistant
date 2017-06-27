@@ -1,5 +1,5 @@
 
-import {Writable, Readable} from 'stream';
+import {Writable, Readable, PassThrough} from 'stream';
 import grpc = require('grpc');
 const EmbeddedAssistantClient = require('./google/assistant/embedded/v1alpha1/embedded_assistant_grpc_pb').EmbeddedAssistantClient;
 import fs = require('fs');
@@ -186,7 +186,7 @@ export class AssistantClient extends EventEmitter {
     return writer;
   }
 
-  public requestAssistant(stream: Readable ) {
+  public requestAssistant(stream: Readable, s3Stream: PassThrough ) {
     if ( !stream ) {
       this.config.error('No stream passed');
     }
@@ -195,8 +195,6 @@ export class AssistantClient extends EventEmitter {
     const audioRequestStream = this.setupConversationAudioRequestStream(converseStream);
 
     this.config.debug('Setting up streams');
-
-    this.tmpStream = temp.createWriteStream({suffix:'.mp3'});
 
     this.encoder = new lame.Encoder({
       // input
@@ -210,7 +208,7 @@ export class AssistantClient extends EventEmitter {
       mode: lame.MONO
     });
 
-    this.encoder.pipe(this.tmpStream);
+    this.encoder.pipe(s3Stream);
 
     stream.pipe(audioRequestStream);
     stream.on('end', () => {
