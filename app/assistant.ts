@@ -4,7 +4,6 @@ import grpc = require('grpc');
 const EmbeddedAssistantClient = require('./google/assistant/embedded/v1alpha1/embedded_assistant_grpc_pb').EmbeddedAssistantClient;
 import fs = require('fs');
 import {Config, AssistantConfig} from './client-config';
-import temp = require('temp');
 import path = require('path');
 import lame = require('lame');
 
@@ -19,7 +18,6 @@ export class AssistantClient extends EventEmitter {
   private callCreds;
   private assistant;
   private finished : boolean;
-  private tmpStream;
   private encoder;
 
   constructor( private config: Config, private oauth2Client ) {
@@ -175,7 +173,6 @@ export class AssistantClient extends EventEmitter {
       } else {
         this.finished = true;
         this.encoder.end();
-        this.emit('audio-file', this.tmpStream.path);
         this.config.debug('finished');
         this.emit('end');
       }
@@ -186,8 +183,8 @@ export class AssistantClient extends EventEmitter {
     return writer;
   }
 
-  public requestAssistant(stream: Readable, s3Stream: PassThrough ) {
-    if ( !stream ) {
+  public requestAssistant(pollyStream: Readable, s3 ) {
+    if ( !pollyStream ) {
       this.config.error('No stream passed');
     }
 
@@ -208,11 +205,15 @@ export class AssistantClient extends EventEmitter {
       mode: lame.MONO
     });
 
-    this.encoder.pipe(s3Stream);
+    this.emit('encoder-ready', this.encoder);
 
-    stream.pipe(audioRequestStream);
-    stream.on('end', () => {
-      this.config.debug('closing conversation');
+    this.encoder.on('end', () => {
+      this.config.debug('Encoder finished');
+    });
+
+    pollyStream.pipe(audioRequestStream);
+    pollyStream.on('end', () => {
+      this.config.debug('Polly stream finished, closing conversation');
       converseStream.end();
     });
   }
