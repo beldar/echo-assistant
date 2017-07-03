@@ -9,3 +9,4 @@ node_modules
 target
 dist
 .DS_Store
+env.list

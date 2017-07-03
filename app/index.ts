@@ -21,8 +21,8 @@ const TESTING                 = process.env.TESTING || false,
       REDIRECT_URL            = process.env.REDIRECT_URL,
       APP_ID                  = process.env.APP_ID;
 
-const polly = new Polly({region: AWS_REGION});
-const s3 = new S3({region: AWS_REGION});
+let polly = new Polly({region: AWS_REGION});
+let s3 = new S3({region: AWS_REGION});
 const allConfig = new Config();
 
 allConfig.debug = debug('node-assistant');
@@ -46,12 +46,15 @@ const sendAudio = (text, assistant: AssistantClient, context) => {
     TextType: "text",
     VoiceId: "Joanna"
   };
-
+  allConfig.debug('Polly synthesize speech params:', params);
   polly.synthesizeSpeech(params)
     .on('httpHeaders', function(statusCode, headers) {
       if (statusCode < 300) {
+        allConfig.debug('Polly finished, requesting assistant...');
         const stream = this.response.httpResponse.createUnbufferedStream();
-        assistant.requestAssistant(stream, getS3Stream( context ));
+        assistant.requestAssistant(stream, s3);
+      } else {
+        allConfig.debug('Polly returned an error status code: ', statusCode);
       }
     })
     .on('error', (response) => allConfig.error('Error while querying Polly', response))
@@ -86,39 +89,75 @@ const assertConstants = ( context ) => {
   return true;
 };
 
-const getS3Stream = function( context ) {
-  const pass = new PassThrough();
-  const fileName = Date.now() + '.mp3';
-  const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: pass};
-  s3.upload(params, (err, data) => {
-    allConfig.debug('New audio file uploaded to S3', data, err);
-    if (!err) {
-      allConfig.debug(':tell', `<audio src="${data.Location}" />`);
-      context.emit(':tell', `<audio src="${data.Location}" />`);
-    }
+const checkS3Bucket = function() {
+  return new Promise(function(fullfil, reject){
+    s3.headBucket({Bucket: AWS_S3_BUCKET}, function(err, data) {
+      if (err) {
+        allConfig.debug('S3 Bucket doesn\'t exist');
+        s3.createBucket({Bucket: AWS_S3_BUCKET}, function(err, data) {
+          if (err) {
+            allConfig.error('Bucket creation failed', err.stack);
+            reject('S3 Bucket could not be created, make sure you have set up the IAM role properly or alternatively try a different random bucket name');
+          } else {
+            allConfig.debug(`S3 Bucket ${AWS_S3_BUCKET} Created`);
+            s3.putBucketLifecycle({
+              Bucket: AWS_S3_BUCKET,
+              LifecycleConfiguration: {
+                Rules: [ /* required */
+                  {
+                    Prefix: '', /* required */
+                    Status: 'Enabled', /* required */
+                    Expiration: {
+                      Days: 1
+                    },
+                    ID: 'onedaylife'
+                  }
+                ]
+              }
+            }, function(err, data) {
+              if (err) {
+                allConfig.error('S3 Bucket Lifecycle failed', err);
+                reject('S3 Bucket Lifecycle failed');
+              } else {
+                allConfig.debug('S3 Bucket Lifecycle successfuly created');
+                fullfil();
+              }
+            })
+          }
+        });
+      } else {
+        //Bucket exists
+        fullfil();
+      }
+    });
   });
-  return pass;
-};
-
-const callAssistant = function(query, context, ACCESS_TOKEN) {
-  auth.on('oauth-ready', (oauth2Client) => {
-    const assistant = new AssistantClient(allConfig, oauth2Client);
-
-    allConfig.debug('Call assistant', query);
-
-    sendAudio(query, assistant, context);
-  });
-
-  auth.loadCredentials(ACCESS_TOKEN);
 };
 
 if ( TESTING ) {
+  allConfig.debug = console.log;
+  allConfig.error = console.error;
+  //Outside of Lambda we need to pass specific keys and secrets
+  polly = new Polly({region: AWS_REGION, accessKeyId: process.env.AWS_POLLY_AK, secretAccessKey: process.env.AWS_POLLY_SECRET,});
+  s3 = new S3({region: AWS_REGION, accessKeyId: process.env.AWS_S3_KEY, secretAccessKey: process.env.AWS_S3_SECRET});
   const query = 'hello';
   const context = { emit: (a,b)=> allConfig.debug(a,b) };
-  const client = require('googleapis').google.auth.OAuth2;
+  const google = require('googleapis');
+  const client = new google.auth.OAuth2(ASSISTANT_CLIENT_ID, ASSISTANT_CLIENT_SECRET, REDIRECT_URL);
+  //If the token expires --> auth.getNewCredentials();
   client.setCredentials(require('./creds.json'));
   const assistant = new AssistantClient(allConfig, client);
-  assistant.requestAssistant(fs.createReadStream('./resources/speech_test.pcm'), getS3Stream( context ));
+  assistant.on('encoder-ready', encoder => {
+    const fileName = Date.now() + '.mp3';
+    const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: encoder};
+    s3.upload(params, (err, data) => {
+      if (!err) {
+        allConfig.debug('Tell: ', data.Location);
+      } else {
+        allConfig.error('Error uploading to S3: ', err);
+      }
+    });
+  });
+  sendAudio('what time is it?', assistant, context);
 }
 
 export const handlers = {
@@ -154,7 +193,31 @@ export const handlers = {
         this.emit(':tellWithLinkAccountCard', LINK_ACCOUNT);
       } else {
         allConfig.debug('Access Token found, carry on');
-        callAssistant(QUERY, this, ACCESS_TOKEN);
+        checkS3Bucket()
+        .then(() => {
+          const oauth2Client = auth.loadCredentials(ACCESS_TOKEN);
+          const assistant = new AssistantClient(allConfig, oauth2Client);
+          //This interval is to avoid lambda finishing execution before uploading to S3
+          const interval = setInterval(function(){}, 1000);
+          assistant.on('encoder-ready', encoder => {
+            const fileName = Date.now() + '.mp3';
+            const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: encoder};
+            s3.upload(params, (err, data) => {
+              if (!err) {
+                allConfig.debug('Tell: ', data.Location);
+                this.emit(':tell', `<audio src="${data.Location}" />`);
+              } else {
+                allConfig.error('Error uploading to S3: ', err);
+              }
+              clearInterval(interval);
+            });
+          });
+          sendAudio(QUERY, assistant, this);
+        })
+        .catch(e => {
+          allConfig.error('S3 Bucket creation failed');
+          this.emit(':tell', e);
+        });
       }
     } else {
       allConfig.debug('Some env vars are NOT set!');

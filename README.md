@@ -12,13 +12,8 @@ encoded and stored on a Amazon S3 bucket for later playback on the Amazon Echo (
 You'll need some environmental variables set up to make it run:
 
 ```bash
-# Amazon Polly for TTS
-AWS_POLLY_AK      # Access Key
-AWS_POLLY_SECRET  # Secret
-
 # Amazon S3 for transient audio file storage
-AWS_S3_KEY        # Access Key
-AWS_S3_SECRET     # Secret
+AWS_S3_BUCKET     # Bucket name, could be anything
 
 # Google Assistant credentials
 ASSISTANT_CLIENT_ID     # Client Id

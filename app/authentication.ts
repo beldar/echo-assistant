@@ -1,6 +1,7 @@
 import fs = require('fs');
 import {Config} from './client-config';
 import {EventEmitter} from 'events';
+import readline = require('readline');
 const google = require('googleapis');
 const OAuth2 = google.auth.OAuth2;
 
@@ -68,7 +69,46 @@ export class Authentication extends EventEmitter {
 
   public loadCredentials(access_token) {
     this.oauth2Client.setCredentials({ access_token });
-    this.emit('oauth-ready', this.oauth2Client);
+    return this.oauth2Client;
+  }
+
+  public getNewCredentials() {
+    const auth = this.config.authentication;
+
+    const url = this.oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+
+      // whatever scopes they need, at least the Assistant one normally
+      scope: auth.scopes
+    });
+
+    console.log('Please copy the below URL into your browser and paste in the reply');
+    console.log(url);
+
+    const codeReader = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      terminal: false
+    });
+
+    codeReader.question('code: ', (code) => {
+      if (!code) {
+        process.exit(-1);
+      }
+
+      this.config.debug('using code ', code, 'to get tokens');
+
+      this.oauth2Client.getToken(code, (err, tokens) => {
+        // Now tokens contains an access_token and an optional refresh_token. Save them.
+        if (err) return console.log('Error getting token', err);
+        console.log('got tokens %j', tokens);
+
+        if (!err) {
+          this.saveCredentials(<Credentials>tokens);
+          this.emit('oauth-ready', this.oauth2Client);
+        }
+      });
+    });
   }
 
   public getClient() {
