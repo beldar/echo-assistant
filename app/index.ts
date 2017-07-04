@@ -133,33 +133,6 @@ const checkS3Bucket = function() {
   });
 };
 
-if ( TESTING ) {
-  allConfig.debug = console.log;
-  allConfig.error = console.error;
-  //Outside of Lambda we need to pass specific keys and secrets
-  polly = new Polly({region: AWS_REGION, accessKeyId: process.env.AWS_POLLY_AK, secretAccessKey: process.env.AWS_POLLY_SECRET,});
-  s3 = new S3({region: AWS_REGION, accessKeyId: process.env.AWS_S3_KEY, secretAccessKey: process.env.AWS_S3_SECRET});
-  const query = 'hello';
-  const context = { emit: (a,b)=> allConfig.debug(a,b) };
-  const google = require('googleapis');
-  const client = new google.auth.OAuth2(ASSISTANT_CLIENT_ID, ASSISTANT_CLIENT_SECRET, REDIRECT_URL);
-  //If the token expires --> auth.getNewCredentials();
-  client.setCredentials(require('./creds.json'));
-  const assistant = new AssistantClient(allConfig, client);
-  assistant.on('encoder-ready', encoder => {
-    const fileName = Date.now() + '.mp3';
-    const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: encoder};
-    s3.upload(params, (err, data) => {
-      if (!err) {
-        allConfig.debug('Tell: ', data.Location);
-      } else {
-        allConfig.error('Error uploading to S3: ', err);
-      }
-    });
-  });
-  sendAudio('what time is it?', assistant, context);
-}
-
 export const handlers = {
   'LaunchRequest': function() {
     allConfig.debug('---- LaunchRequest handler');
@@ -240,3 +213,30 @@ exports.handler = function(event, context, callback) {
 process.on('uncaughtException', (err) => {
   allConfig.error('uncaughtException', err);
 });
+
+if ( TESTING ) {
+  allConfig.debug = console.log;
+  allConfig.error = console.error;
+  //Outside of Lambda we need to pass specific keys and secrets
+  polly = new Polly({region: AWS_REGION, accessKeyId: process.env.AWS_POLLY_AK, secretAccessKey: process.env.AWS_POLLY_SECRET,});
+  s3 = new S3({region: AWS_REGION, accessKeyId: process.env.AWS_S3_KEY, secretAccessKey: process.env.AWS_S3_SECRET});
+  const query = 'hello';
+  const context = { emit: (a,b)=> allConfig.debug(a,b) };
+  const google = require('googleapis');
+  const client = new google.auth.OAuth2(ASSISTANT_CLIENT_ID, ASSISTANT_CLIENT_SECRET, REDIRECT_URL);
+  //If the token expires --> auth.getNewCredentials();
+  client.setCredentials(require('./creds.json'));
+  const assistant = new AssistantClient(allConfig, client);
+  assistant.on('encoder-ready', encoder => {
+    const fileName = Date.now() + '.mp3';
+    const params = {ACL:'public-read', Bucket: AWS_S3_BUCKET, Key: fileName, Body: encoder};
+    s3.upload(params, (err, data) => {
+      if (!err) {
+        allConfig.debug('Tell: ', data.Location);
+      } else {
+        allConfig.error('Error uploading to S3: ', err);
+      }
+    });
+  });
+  sendAudio('what time is it?', assistant, context);
+}
