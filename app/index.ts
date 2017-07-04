@@ -52,7 +52,7 @@ const sendAudio = (text, assistant: AssistantClient, context) => {
       if (statusCode < 300) {
         allConfig.debug('Polly finished, requesting assistant...');
         const stream = this.response.httpResponse.createUnbufferedStream();
-        assistant.requestAssistant(stream, s3);
+        assistant.requestAssistant(stream);
       } else {
         allConfig.debug('Polly returned an error status code: ', statusCode);
       }

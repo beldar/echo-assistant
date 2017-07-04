@@ -183,7 +183,7 @@ export class AssistantClient extends EventEmitter {
     return writer;
   }
 
-  public requestAssistant(pollyStream: Readable, s3 ) {
+  public requestAssistant(pollyStream: Readable ) {
     if ( !pollyStream ) {
       this.config.error('No stream passed');
     }
